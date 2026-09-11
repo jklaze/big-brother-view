@@ -148,7 +148,13 @@ paste into Provider Settings persist in your host `.env` and source edits still
 hot-reload. The container binds `0.0.0.0` *inside* the container, but the port
 is published to `127.0.0.1` only, so the default matches the native one: nobody
 else can reach your server. Widening that mapping puts you under
-[Sharing an instance](#-sharing-an-instance) — keys and all.
+[Sharing an instance](#-sharing-an-instance) — keys and all, and the POWER UP
+panel along with them: the launcher trusts the container's gateway address as
+"this machine" because that is where Docker delivers your own browser from, and
+a widened mapping delivers everyone else from the same address.
+
+On Linux, export your ids first so the files the container writes stay yours
+(`export UID GID` — Docker Desktop on macOS and Windows maps ownership for you).
 
 `node_modules` deliberately stays inside the image, so it survives in an
 anonymous volume across restarts: after a `git pull` that changes dependencies,

@@ -25,4 +25,7 @@ COPY . .
 ENV HOST=0.0.0.0
 ENV PORT=4173
 EXPOSE 4173
-CMD ["npm", "run", "dev"]
+# The launcher is `npm run dev` plus one step: it trusts the container's
+# gateway address for Provider Settings, because that is where Docker delivers
+# the host's own browser from (never 127.0.0.1). See scripts/docker-start.mjs.
+CMD ["node", "scripts/docker-start.mjs"]

@@ -61,6 +61,16 @@ The dev server is a **key broker**: every server-side key above is spendable by 
 - **LAN exposure is an explicit opt-in**: `HOST=0.0.0.0 ./scripts/dev-fresh.sh`. The launcher prints a prominent warning plus your LAN URL. Understand what opting in means: **every device on that network can drive the proxies and spend your OpenAI / Google / OpenSky / AISStream / TomTom / FIRMS quota** for as long as the server runs. Do this only on networks you trust.
 - **App-level throttles (opt-in):** `GEV_RATELIMIT_OPENAI_PER_MIN` and `GEV_RATELIMIT_GOOGLE_PER_MIN` cap the cost-bearing endpoints per client IP per minute (over-limit requests receive a sanitized `429`). They are **per-IP, process-local, in-memory guards** — they reset on restart and are **not billing caps**.
 - **Provider-side budgets are the real backstop.** For hard spend protection, configure limits where the money is: OpenAI platform usage limits, Google Cloud budget alerts + per-API quotas, and equivalent controls for any other keyed provider.
+- **Docker trusts one address, and only because the port is on loopback.**
+  Docker delivers the host's own browser to the container from the container
+  network's gateway, never from `127.0.0.1`, so a loopback-only Provider
+  Settings would refuse the machine running it. `scripts/docker-start.mjs`
+  therefore sets `GEV_KEY_SETUP_TRUSTED_PEERS` to exactly that gateway
+  address. The list accepts exact IPs only (no wildcards or prefixes), is unset
+  under every other launcher, and does not relax the Host, Origin,
+  Content-Type, proxy-header, or sharing checks. It is safe precisely because
+  `compose.yaml` publishes on `127.0.0.1`: widen that mapping and every LAN
+  peer also arrives from the gateway, so treat it as the LAN opt-in above.
 - **Pinokio LAN and Cloudflare sharing are refused.** The current supported
   Pinokio release re-reads sharing state when an app registers its Open URL and
   logs a successful tunnel-login passcode in its own notification and terminal

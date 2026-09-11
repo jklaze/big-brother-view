@@ -101,6 +101,24 @@ const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 /** Socket addresses that count as this machine. */
 const LOOPBACK_ADDRESSES = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 
+/**
+ * Whether a socket address is one the operator has explicitly declared to be
+ * this machine via GEV_KEY_SETUP_TRUSTED_PEERS (comma-separated exact IPv4 or
+ * IPv6 addresses; no wildcards, prefixes, or hostnames). Unset trusts nothing.
+ *
+ * The one shipped use is the Docker launcher (scripts/docker-start.mjs): a
+ * port published on the host's loopback still delivers the host's own
+ * browser to the container FROM the container network's gateway address, so
+ * loopback alone would refuse the very machine running the server.
+ */
+function isTrustedPeerAddress(remoteAddress, env) {
+  const address = String(remoteAddress || '').trim().toLowerCase().replace(/^::ffff:/, '');
+  if (!address) return false;
+  return String(env?.GEV_KEY_SETUP_TRUSTED_PEERS || '')
+    .split(',')
+    .some((entry) => entry.trim().toLowerCase().replace(/^::ffff:/, '') === address);
+}
+
 /** Parse an exact local request authority from a Host header. */
 function localAuthority(hostHeader, protocol) {
   const raw = String(hostHeader || '').trim().toLowerCase();
@@ -174,7 +192,9 @@ export function parseWindowsUserSid(stdout) {
  *    outright — a credential-writing endpoint has no business existing on a
  *    shared instance, and tunnel traffic reaches the server FROM loopback, so
  *    the socket check below cannot carry that boundary alone;
- *  - loopback socket: refuses LAN peers when the server is bound wide;
+ *  - loopback socket: refuses LAN peers when the server is bound wide. The
+ *    only exception is an exact address the operator listed in
+ *    GEV_KEY_SETUP_TRUSTED_PEERS, and every later check still applies to it;
  *  - local Host header: tunnel and DNS-rebinding traffic carries a foreign
  *    Host even when the socket says loopback;
  *  - exact same Origin on POST: a hostile web page can make a browser POST to
@@ -221,7 +241,7 @@ export function admitKeySetupRequest({
   if (sharingEnabled) {
     return { ok: false, status: 403, error: 'Provider Settings is disabled while sharing is enabled' };
   }
-  if (!LOOPBACK_ADDRESSES.has(String(remoteAddress || ''))) {
+  if (!LOOPBACK_ADDRESSES.has(String(remoteAddress || '')) && !isTrustedPeerAddress(remoteAddress, env)) {
     return { ok: false, status: 403, error: 'Provider Settings answers only the machine running the server' };
   }
   const authority = localAuthority(hostHeader, protocol);

@@ -258,6 +258,22 @@ test('the admission gate refuses every non-local shape, one assertion per refusa
   assert.equal(admitKeySetupRequest({ ...local, env: { PINOKIO_SHARE_LOCAL: '1' } }).ok, false, 'LAN sharing disables the surface');
   // A LAN peer reaching a wide-bound server.
   assert.equal(admitKeySetupRequest({ ...local, remoteAddress: '192.168.1.20' }).ok, false, 'non-loopback socket refused');
+  // A container whose port is published on the host's loopback still sees the
+  // host's browser arrive from the container network's gateway. Only an exact
+  // address the operator listed admits it, and every other check still applies.
+  const trusted = { GEV_KEY_SETUP_TRUSTED_PEERS: ' 10.0.0.9 , 172.29.73.1 ' };
+  const gateway = { ...local, remoteAddress: '172.29.73.1' };
+  assert.equal(admitKeySetupRequest(gateway).ok, false, 'container gateway refused without opt-in');
+  assert.equal(admitKeySetupRequest({ ...gateway, env: trusted }).ok, true, 'explicitly trusted peer admitted');
+  assert.equal(admitKeySetupRequest({ ...gateway, remoteAddress: '::ffff:172.29.73.1', env: trusted }).ok, true, 'IPv4-mapped trusted peer admitted');
+  assert.equal(admitKeySetupRequest({ ...local, remoteAddress: '192.168.1.20', env: trusted }).ok, false, 'unlisted peer still refused');
+  assert.equal(admitKeySetupRequest({ ...gateway, env: { GEV_KEY_SETUP_TRUSTED_PEERS: '*' } }).ok, false, 'no wildcard trust');
+  assert.equal(admitKeySetupRequest({ ...gateway, env: { GEV_KEY_SETUP_TRUSTED_PEERS: '172.29.73.0/24' } }).ok, false, 'no prefix trust');
+  assert.equal(admitKeySetupRequest({ ...gateway, env: { GEV_KEY_SETUP_TRUSTED_PEERS: '' } }).ok, false, 'empty list trusts nothing');
+  assert.equal(admitKeySetupRequest({ ...gateway, env: { ...trusted, PINOKIO_SHARE_LOCAL: '1' } }).ok, false, 'sharing still disables the surface for a trusted peer');
+  assert.equal(admitKeySetupRequest({ ...gateway, env: trusted, hostHeader: 'abc.trycloudflare.com' }).ok, false, 'trusted peer still needs a local Host');
+  assert.equal(admitKeySetupRequest({ ...gateway, env: trusted, origin: 'https://evil.example' }).ok, false, 'trusted peer still needs the exact Origin');
+  assert.equal(admitKeySetupRequest({ ...gateway, env: trusted, proxyHeaders: { 'x-forwarded-for': '203.0.113.5' } }).ok, false, 'trusted peer still refuses proxied requests');
   // Tunnel and DNS-rebinding traffic carries a foreign Host over a loopback socket.
   assert.equal(admitKeySetupRequest({ ...local, hostHeader: 'abc.trycloudflare.com' }).ok, false, 'foreign Host refused');
   assert.equal(admitKeySetupRequest({ ...local, hostHeader: 'workstation.local:4173' }).ok, false, 'non-localhost hostnames refused');
